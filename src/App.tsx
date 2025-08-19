@@ -1,4 +1,3 @@
-/* The full WildPraxis v2 app provided by the user, adapted to TSX with no raw '>' in JSX */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Brain, Trees, Users, Compass, BookOpen, Lightbulb, FlaskConical, Globe2, Settings,
@@ -11,22 +10,43 @@ import {
   PieChart, Pie, Cell
 } from "recharts";
 
-const THEME = { forest: "#1f3d2a", leaf: "#5aa870", gold: "#f5a524", coal: "#0f172a", mist: "#f7faf7", teenPink: "#f472b6", teenIndigo: "#6366f1" } as const;
+/**
+ * WildPraxis v2 — Deep Dive
+ * Three tracks: Conservation Leaders • Nonprofit Leaders • Teen Track
+ * Adds a new "Deep Dive" tab with reflective tools: Values Radar, Purpose Builder,
+ * Society Map (lightweight), and Journals. No server; all state in localStorage.
+ * Safe JSX (no raw ">" characters). Mapbox GL loads dynamically if a public token is provided.
+ */
+
+// ---- THEME ----
+const THEME = {
+  forest: "#1f3d2a",
+  leaf: "#5aa870",
+  gold: "#f5a524",
+  coal: "#0f172a",
+  mist: "#f7faf7",
+  teenPink: "#f472b6",
+  teenIndigo: "#6366f1",
+};
 const shadow = "shadow-[0_10px_30px_rgba(0,0,0,0.12)]";
 const cardBase = `rounded-2xl ${shadow} border border-black/5 bg-white`;
 const pill = "px-2.5 py-1 rounded-full text-xs font-semibold";
 
-function useLocalState<T = any>(key: string, initial: T) {
-  const [value, setValue] = useState<T>(() => {
-    try { const raw = localStorage.getItem(key); return raw ? (JSON.parse(raw) as T) : initial; } catch { return initial; }
+// ---- Local Storage Hook ----
+function useLocalState(key, initial) {
+  const [value, setValue] = useState(() => {
+    try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : initial; } catch { return initial; }
   });
   useEffect(() => { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} }, [key, value]);
-  return [value, setValue] as const;
+  return [value, setValue];
 }
 
-function classNames(...xs: Array<string | false | null | undefined>) { return xs.filter(Boolean).join(" "); }
+// ---- Types (JSDoc for DX) ----
+/** @typedef {{ id: string, title: string, estMins: number, summary: string, checkpoints: string[] }} Lesson */
+/** @typedef {{ key: string, icon: any, title: string, subtitle: string, color: string, lessons: Lesson[] }} Module */
 
-// Modules (trimmed to user content)
+// ---- Modules: Base content (v2 keeps it concise; Deep Dive is the star) ----
+/** @type {Module[]} */
 const MOD_CONSERVATION = [
   { key: "core", icon: <Brain className="w-5 h-5" />, title: "Core Literacy", subtitle: "Models • Ethics • Data",
     color: "from-emerald-500 via-emerald-600 to-emerald-700",
@@ -47,6 +67,7 @@ const MOD_CONSERVATION = [
     ] },
 ];
 
+/** @type {Module[]} */
 const MOD_NONPROFIT = [
   { key: "core", icon: <Users className="w-5 h-5" />, title: "AI Literacy for Nonprofits", subtitle: "Models • Access • Value",
     color: "from-indigo-500 via-sky-600 to-teal-600",
@@ -66,6 +87,7 @@ const MOD_NONPROFIT = [
     ] },
 ];
 
+/** @type {Module[]} */
 const MOD_TEEN = [
   { key: "core", icon: <Sparkles className="w-5 h-5" />, title: "How AI Works (Teen)", subtitle: "Systems • Prompts • Judgment",
     color: "from-fuchsia-500 via-violet-600 to-indigo-600",
@@ -80,30 +102,36 @@ const MOD_TEEN = [
     ] },
 ];
 
-const QUIZ: any = {
+// ---- Quiz banks (brief) ----
+const QUIZ = {
   conservation: { core: [ { q: "Embeddings help with?", a: "Semantic search and retrieval." } ] },
   nonprofit: { core: [ { q: "Context window is?", a: "How much recent text a model can see at once." } ] },
   teen: { core: [ { q: "Prompt skeleton?", a: "Role, goal, constraints, steps; include an example." } ] }
 };
 
+// ---- Helpers ----
+function classNames(...xs){ return xs.filter(Boolean).join(" "); }
+
+// ---- App ----
 export default function WildPraxisV2App(){
-  const [track, setTrack] = useLocalState("wp2.track", "conservation");
-  const [tab, setTab] = useLocalState("wp2.tab", "learn");
+  const [track, setTrack] = useLocalState("wp2.track", /** @type {"conservation"|"nonprofit"|"teen"} */("conservation"));
+  const [tab, setTab] = useLocalState("wp2.tab", /** @type {"learn"|"explore"|"deep"|"workbench"|"resources"|"admin"} */("learn"));
   const [notes, setNotes] = useLocalState("wp2.notes", "");
   const [mapToken, setMapToken] = useLocalState("wp2.mapToken", "");
-  const [csvRows, setCsvRows] = useState<any[] | null>(null);
+  const [csvRows, setCsvRows] = useState(null);
   const modules = track === 'conservation' ? MOD_CONSERVATION : track === 'nonprofit' ? MOD_NONPROFIT : MOD_TEEN;
-  const quizBank = (QUIZ as any)[track].core || [];
+
+  const quizBank = (QUIZ[track] && QUIZ[track].core) || [];
 
   return (
     <div className="min-h-screen" style={{ background: THEME.mist }}>
-      <Header track={track as any} tab={tab as any} setTab={setTab as any} setTrack={setTrack as any} />
+      <Header track={track} tab={tab} setTab={setTab} setTrack={setTrack} />
 
       <main className="mx-auto max-w-7xl px-4 py-6">
         {tab === 'learn' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-6">
-              <Hero track={track as any} />
+              <Hero track={track} />
               {modules.map(m => <ModuleCard key={m.key} module={m} />)}
             </div>
             <div className="space-y-6">
@@ -111,17 +139,25 @@ export default function WildPraxisV2App(){
                 <QuickQuiz bank={quizBank} />
               </Section>
               <Section title="Scratchpad" icon={<BookOpen className="w-4 h-4" />}>
-                <textarea className="w-full h-40 p-3 rounded-xl border border-black/10 text-sm" placeholder="Ideas, drafts, action items…" value={notes as any} onChange={e=>setNotes((e.target as any).value)} />
+                <textarea className="w-full h-40 p-3 rounded-xl border border-black/10 text-sm" placeholder="Ideas, drafts, action items…" value={notes} onChange={e=>setNotes(e.target.value)} />
               </Section>
             </div>
           </div>
         )}
 
-        {tab === 'explore' && <Explore track={track as any} />}
-        {tab === 'deep' && <DeepDive track={track as any} />}
-        {tab === 'workbench' && <Workbench mapToken={mapToken as any} csvRows={csvRows as any} setCsvRows={setCsvRows as any} />}
-        {tab === 'resources' && <Resources track={track as any} />}
-        {tab === 'admin' && <Admin mapToken={mapToken as any} setMapToken={setMapToken as any} />}
+        {tab === 'explore' && <Explore track={track} />}
+
+        {tab === 'deep' && <DeepDive track={track} />}
+
+        {tab === 'workbench' && (
+          <Workbench mapToken={mapToken} csvRows={csvRows} setCsvRows={setCsvRows} />
+        )}
+
+        {tab === 'resources' && <Resources track={track} />}
+
+        {tab === 'admin' && (
+          <Admin mapToken={mapToken} setMapToken={setMapToken} />
+        )}
       </main>
 
       <Footer />
@@ -129,7 +165,8 @@ export default function WildPraxisV2App(){
   );
 }
 
-function Header({ track, tab, setTab, setTrack }: any){
+// ---- Header ----
+function Header({ track, tab, setTab, setTrack }){
   return (
     <header className="sticky top-0 z-30 backdrop-blur supports-[backdrop-filter]:bg-white/60 bg-white/70 border-b border-black/5">
       <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
@@ -162,13 +199,14 @@ function Header({ track, tab, setTab, setTrack }: any){
   );
 }
 
-function Tab({ label, icon, active, onClick }: any){
+function Tab({ label, icon, active, onClick }){
   return (
     <button onClick={onClick} className={classNames("px-3 py-1.5 rounded-xl flex items-center gap-2 border border-transparent text-sm transition", active ? "bg-black/80 text-white" : "hover:bg-black/5 border-black/10")}>{icon}<span>{label}</span></button>
   );
 }
 
-function Hero({ track }: any){
+// ---- Hero ----
+function Hero({ track }){
   const title = track === 'nonprofit' ? 'Understand AI. Build capacity. Protect your mission.' : track === 'teen' ? 'Create with care. Learn how systems work and build things that matter.' : 'Learn AI like a systems thinker. Serve people and places.';
   const tagLeft = track === 'nonprofit' ? 'Nonprofit Leaders' : track === 'teen' ? 'Teen Track' : 'Conservation Leaders';
   const tagRight = track === 'nonprofit' ? 'Capacity • Governance • Impact' : track === 'teen' ? 'Creative Tech • Brand • Ethics' : 'Place based • PA • Appalachia';
@@ -190,7 +228,7 @@ function Hero({ track }: any){
   );
 }
 
-function Section({ title, icon, children, id }: any){
+function Section({ title, icon, children, id }){
   return (
     <section id={id} className={classNames("mb-8", shadow)} style={{ borderRadius: 24, background: 'white', border: '1px solid rgba(0,0,0,0.05)' }}>
       <div className="flex items-center gap-3 px-5 py-4" style={{ background: THEME.mist, borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
@@ -202,8 +240,8 @@ function Section({ title, icon, children, id }: any){
   );
 }
 
-function ModuleCard({ module }: any){
-  const [done, setDone] = useLocalState(`wp2.done.${module.key}`, {} as any);
+function ModuleCard({ module }){
+  const [done, setDone] = useLocalState(`wp2.done.${module.key}`, {});
   return (
     <div className={classNames(cardBase, "overflow-hidden")}>
       <div className="px-6 py-5 border-b border-black/5" style={{ background: THEME.mist }}>
@@ -216,20 +254,20 @@ function ModuleCard({ module }: any){
         </div>
       </div>
       <div className="p-5 grid gap-4">
-        {module.lessons.map((l: any) => (
+        {module.lessons.map((l) => (
           <div key={l.id} className="p-4 rounded-xl border border-black/10">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="font-semibold" style={{ color: THEME.coal }}>{l.title}</div>
                 <div className="text-sm opacity-70">{l.summary}</div>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {l.checkpoints.map((c: string, idx: number) => (
+                  {l.checkpoints.map((c, idx) => (
                     <span key={idx} className={pill} style={{ background: THEME.leaf, color: 'white' }}>{c}</span>
                   ))}
                 </div>
                 <div className="mt-3 text-xs opacity-70">~{l.estMins} mins</div>
               </div>
-              <button onClick={() => setDone((prev: any) => ({ ...prev, [l.id]: !prev[l.id] }))} className={classNames("px-3 py-1.5 rounded-lg text-sm border", (done as any)[l.id] ? "border-green-600 text-green-700" : "border-black/10")}>{(done as any)[l.id] ? <CheckCircle2 className="inline w-4 h-4 mr-1" /> : <Circle className="inline w-4 h-4 mr-1" />}Done</button>
+              <button onClick={() => setDone(prev => ({ ...prev, [l.id]: !prev[l.id] }))} className={classNames("px-3 py-1.5 rounded-lg text-sm border", done[l.id] ? "border-green-600 text-green-700" : "border-black/10")}>{done[l.id] ? <CheckCircle2 className="inline w-4 h-4 mr-1" /> : <Circle className="inline w-4 h-4 mr-1" />}Done</button>
             </div>
           </div>
         ))}
@@ -238,13 +276,14 @@ function ModuleCard({ module }: any){
   );
 }
 
-function Explore({ track }: any){
+// ---- Explore (unchanged spirit) ----
+function Explore({ track }){
   if (track === 'nonprofit') return <NPScenarios/>;
   if (track === 'teen') return <TeenStudio/>;
   return <MysteryCases/>;
 }
 
-function CaseCard({ title, tag, summary, prompts }: any){
+function CaseCard({ title, tag, summary, prompts }){
   const [reveal, setReveal] = useState(false);
   return (
     <div className={`${cardBase} p-4`} onMouseDown={() => setReveal(true)} onMouseUp={() => setReveal(false)} onMouseLeave={() => setReveal(false)}>
@@ -253,7 +292,7 @@ function CaseCard({ title, tag, summary, prompts }: any){
         <span className={pill} style={{ background: THEME.gold }}>{tag}</span>
       </div>
       <p className="mt-2 text-sm opacity-80">{summary}</p>
-      <ul className="mt-3 list-disc pl-5 text-sm space-y-1">{prompts.map((p: string, i: number) => <li key={i}>{p}</li>)}</ul>
+      <ul className="mt-3 list-disc pl-5 text-sm space-y-1">{prompts.map((p, i) => <li key={i}>{p}</li>)}</ul>
       {reveal && (<div className="mt-3 text-xs p-2 rounded-lg" style={{ background: THEME.mist }}><strong>Nudge:</strong> start simple — baseline before complex models.</div>)}
     </div>
   );
@@ -320,7 +359,7 @@ function TeenStudio(){
     const tpl = `# Brand Builder Prompts\n\n1) Reflect on strengths\nRole: coach. Goal: find themes. Inputs: ${strengths || "[paste strengths]"}.\nAsk: what themes connect these and which projects fit me.\n\n2) Spot skill gaps\nRole: mentor. Goal: plan improvements. Inputs: ${weaknesses || "[paste weaknesses]"}.\nAsk: give a two week plan with resources.\n\n3) Portfolio review\nRole: hiring manager. Goal: objective feedback. Inputs: ${links || "[links to work]"}.\nAsk: what is strongest and what is missing.\n\n4) Resume edit\nRole: editor. Goal: clear bullets. Inputs: ${resume || "[paste resume]"}.\nAsk: rewrite bullets with action, impact, and evidence.\n\n5) Project starter\nRole: product partner. Goal: scope a real project in conservation, art, or science.\nInputs: ${story || "[your story]"}.\nAsk: write milestones for four weeks, two hours each week, with deliverables.`;
     setPrompts(tpl);
   }
-  function copyAll(){ if (!prompts) return; (navigator as any).clipboard?.writeText(prompts).catch(()=>{}); }
+  function copyAll(){ if (!prompts) return; navigator.clipboard?.writeText(prompts).catch(()=>{}); }
 
   return (
     <div className="grid lg:grid-cols-5 gap-6">
@@ -337,16 +376,16 @@ function TeenStudio(){
       <div className="lg:col-span-2 space-y-6">
         <Section title="Brand Lab" icon={<Users className="w-4 h-4" />}>
           <div className={`${cardBase} p-4 grid gap-3 text-sm`}>
-            <textarea className="w-full min-h-16 p-2 rounded-lg border border-black/10" placeholder="Your story (what you care about, where you are from)…" value={story} onChange={e=>setStory((e.target as any).value)} />
-            <textarea className="w-full min-h-16 p-2 rounded-lg border border-black/10" placeholder="Strengths (skills you are proud of)…" value={strengths} onChange={e=>setStrengths((e.target as any).value)} />
-            <textarea className="w-full min-h-16 p-2 rounded-lg border border-black/10" placeholder="Weaknesses (areas to grow)…" value={weaknesses} onChange={e=>setWeaknesses((e.target as any).value)} />
-            <textarea className="w-full min-h-16 p-2 rounded-lg border border-black/10" placeholder="Links to work (Drive, GitHub, Canva, YouTube)…" value={links} onChange={e=>setLinks((e.target as any).value)} />
-            <textarea className="w-full min-h-16 p-2 rounded-lg border border-black/10" placeholder="Paste resume text (optional)…" value={resume} onChange={e=>setResume((e.target as any).value)} />
+            <textarea className="w-full min-h-16 p-2 rounded-lg border border-black/10" placeholder="Your story (what you care about, where you are from)…" value={story} onChange={e=>setStory(e.target.value)} />
+            <textarea className="w-full min-h-16 p-2 rounded-lg border border-black/10" placeholder="Strengths (skills you are proud of)…" value={strengths} onChange={e=>setStrengths(e.target.value)} />
+            <textarea className="w-full min-h-16 p-2 rounded-lg border border-black/10" placeholder="Weaknesses (areas to grow)…" value={weaknesses} onChange={e=>setWeaknesses(e.target.value)} />
+            <textarea className="w-full min-h-16 p-2 rounded-lg border border-black/10" placeholder="Links to work (Drive, GitHub, Canva, YouTube)…" value={links} onChange={e=>setLinks(e.target.value)} />
+            <textarea className="w-full min-h-16 p-2 rounded-lg border border-black/10" placeholder="Paste resume text (optional)…" value={resume} onChange={e=>setResume(e.target.value)} />
             <div className="flex flex-wrap gap-2">
               <button onClick={makePrompts} className="px-3 py-2 rounded-lg text-sm border border-black/10">Generate Prompts</button>
               <button onClick={copyAll} disabled={!prompts} className="px-3 py-2 rounded-lg text-sm border border-black/10 disabled:opacity-50"><Copy className="inline w-4 h-4 mr-1"/> Copy</button>
             </div>
-            <textarea className="w-full h-40 p-2 rounded-lg border border-black/10 text-xs" placeholder="Your personalized prompts will appear here…" value={prompts} onChange={e=>setPrompts((e.target as any).value)} />
+            <textarea className="w-full h-40 p-2 rounded-lg border border-black/10 text-xs" placeholder="Your personalized prompts will appear here…" value={prompts} onChange={e=>setPrompts(e.target.value)} />
             <div className="text-xs opacity-70">Your actions shape your brand at school and online. Aim for work you are proud to sign.</div>
           </div>
         </Section>
@@ -355,7 +394,8 @@ function TeenStudio(){
   );
 }
 
-function DeepDive({ track }: any){
+// ---- Deep Dive ----
+function DeepDive({ track }){
   return (
     <div className="grid lg:grid-cols-5 gap-6">
       <div className="lg:col-span-3 space-y-6">
@@ -370,11 +410,13 @@ function DeepDive({ track }: any){
   );
 }
 
-function ValuesCompass({ track }: any){
+function ValuesCompass({ track }){
   const KEY = `wp2.values.${track}`;
-  const [vals, setVals] = useLocalState(KEY, { Integrity: 3, Service: 3, Curiosity: 3, Craft: 3, Community: 3, Sustainability: 3 });
-  const data = useMemo(() => Object.keys(vals).map(k => ({ axis: k, value: Number((vals as any)[k]||0) })), [vals]);
-  const set = (k: string, v: any) => setVals((prev: any) => ({ ...prev, [k]: Number(v) }));
+  const [vals, setVals] = useLocalState(KEY, {
+    Integrity: 3, Service: 3, Curiosity: 3, Craft: 3, Community: 3, Sustainability: 3,
+  });
+  const data = useMemo(() => Object.keys(vals).map(k => ({ axis: k, value: Number(vals[k]||0) })), [vals]);
+  const set = (k, v) => setVals((prev) => ({ ...prev, [k]: Number(v) }));
   return (
     <Section title="Inner Compass: Values Radar" icon={<Target className="w-4 h-4" />}>
       <div className="grid md:grid-cols-2 gap-4 items-center">
@@ -391,7 +433,7 @@ function ValuesCompass({ track }: any){
           {Object.keys(vals).map((k) => (
             <label key={k} className="flex flex-col">
               <span className="mb-1 font-medium" style={{ color: THEME.coal }}>{k}</span>
-              <input type="range" min="0" max="5" value={(vals as any)[k]} onChange={(e)=>set(k, (e.target as any).value)} />
+              <input type="range" min="0" max="5" value={vals[k]} onChange={(e)=>set(k, e.target.value)} />
             </label>
           ))}
         </div>
@@ -401,7 +443,7 @@ function ValuesCompass({ track }: any){
   );
 }
 
-function PurposeBuilder({ track }: any){
+function PurposeBuilder({ track }){
   const KEY = `wp2.purpose.${track}`;
   const [who, setWho] = useLocalState(KEY+".who", "");
   const [where, setWhere] = useLocalState(KEY+".where", track==='conservation' ? 'our region and watersheds' : track==='nonprofit' ? 'our community and programs' : 'my school and community');
@@ -409,17 +451,17 @@ function PurposeBuilder({ track }: any){
   const [values, setValues] = useLocalState(KEY+".values", "integrity, service");
   const [guard, setGuard] = useLocalState(KEY+".guard", "respect privacy, seek consent, and cite sources");
   const statement = useMemo(() => {
-    const w = (who as any) || (track==='teen' ? 'I' : 'We');
-    return `${w} aim to serve ${where} by using ${(skills as any) || 'thoughtful tools'} — guided by ${values} — in a way that ${guard}.`;
+    const w = who || (track==='teen' ? 'I' : 'We');
+    return `${w} aim to serve ${where} by using ${skills || 'thoughtful tools'} — guided by ${values} — in a way that ${guard}.`;
   }, [who, where, skills, values, guard, track]);
   return (
     <Section title="Purpose Builder" icon={<Heart className="w-4 h-4" />}>
       <div className="grid md:grid-cols-2 gap-3 text-sm">
-        <input className="p-2 rounded-lg border border-black/10" placeholder={track==='teen' ? 'Who am I becoming' : 'Who we are'} value={who as any} onChange={e=>setWho((e.target as any).value)} />
-        <input className="p-2 rounded-lg border border-black/10" placeholder="Where we serve" value={where as any} onChange={e=>setWhere((e.target as any).value)} />
-        <input className="p-2 rounded-lg border border-black/10" placeholder="Skills and strengths" value={skills as any} onChange={e=>setSkills((e.target as any).value)} />
-        <input className="p-2 rounded-lg border border-black/10" placeholder="Values that guide us" value={values as any} onChange={e=>setValues((e.target as any).value)} />
-        <input className="p-2 rounded-lg border border-black/10 md:col-span-2" placeholder="Guardrails (privacy, equity, citations…)" value={guard as any} onChange={e=>setGuard((e.target as any).value)} />
+        <input className="p-2 rounded-lg border border-black/10" placeholder={track==='teen' ? 'Who am I becoming' : 'Who we are'} value={who} onChange={e=>setWho(e.target.value)} />
+        <input className="p-2 rounded-lg border border-black/10" placeholder="Where we serve" value={where} onChange={e=>setWhere(e.target.value)} />
+        <input className="p-2 rounded-lg border border-black/10" placeholder="Skills and strengths" value={skills} onChange={e=>setSkills(e.target.value)} />
+        <input className="p-2 rounded-lg border border-black/10" placeholder="Values that guide us" value={values} onChange={e=>setValues(e.target.value)} />
+        <input className="p-2 rounded-lg border border-black/10 md:col-span-2" placeholder="Guardrails (privacy, equity, citations…)" value={guard} onChange={e=>setGuard(e.target.value)} />
       </div>
       <div className={`${cardBase} p-4 mt-3 text-sm`}>
         <div className="opacity-70">Draft statement</div>
@@ -429,19 +471,22 @@ function PurposeBuilder({ track }: any){
   );
 }
 
-function SocietyMap({ track }: any){
+function SocietyMap({ track }){
   const KEY = `wp2.society.${track}`;
-  const [nodes, setNodes] = useLocalState(KEY, [ { name: 'Community', type: 'ally' }, { name: 'Environment', type: 'beneficiary' } ]);
+  const [nodes, setNodes] = useLocalState(KEY, [
+    { name: 'Community', type: 'ally' },
+    { name: 'Environment', type: 'beneficiary' },
+  ]);
   const [name, setName] = useState("");
   const [type, setType] = useState("ally");
-  const colors: any = { ally: '#5aa870', funder: '#f5a524', regulator: '#2563eb', beneficiary: '#0ea5e9', peer: '#a78bfa' };
-  function add(){ const nm = name.trim(); if (!nm) return; setNodes((prev: any)=>[...prev, { name: nm, type }]); setName(""); }
+  const colors = { ally: '#5aa870', funder: '#f5a524', regulator: '#2563eb', beneficiary: '#0ea5e9', peer: '#a78bfa' };
+  function add(){ if (!name.trim()) return; setNodes((prev)=>[...prev, { name: name.trim(), type }]); setName(""); }
   return (
     <Section title="Society Sketch" icon={<Scale className="w-4 h-4" />}>
       <div className="text-sm opacity-80">Map relationships: who benefits, who decides, who helps. Keep names respectful; this stays on your device.</div>
       <div className="mt-3 flex gap-2 text-sm">
-        <input className="flex-1 p-2 rounded-lg border border-black/10" placeholder="Add stakeholder (e.g., local watershed group)" value={name} onChange={e=>setName((e.target as any).value)} />
-        <select className="p-2 rounded-lg border border-black/10" value={type} onChange={e=>setType((e.target as any).value)}>
+        <input className="flex-1 p-2 rounded-lg border border-black/10" placeholder="Add stakeholder (e.g., local watershed group)" value={name} onChange={e=>setName(e.target.value)} />
+        <select className="p-2 rounded-lg border border-black/10" value={type} onChange={e=>setType(e.target.value)}>
           <option value="ally">Ally</option>
           <option value="beneficiary">Beneficiary</option>
           <option value="funder">Funder</option>
@@ -451,10 +496,10 @@ function SocietyMap({ track }: any){
         <button className="px-3 py-2 rounded-lg text-sm border border-black/10" onClick={add}>Add</button>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2">
-        {(nodes as any[]).map((n, i) => (
+        {nodes.map((n, i) => (
           <div key={i} className="px-3 py-2 rounded-lg text-sm border border-black/10 flex items-center justify-between">
-            <span>{(n as any).name}</span>
-            <span className={pill} style={{ background: colors[(n as any).type]||'#444', color: 'white' }}>{(n as any).type}</span>
+            <span>{n.name}</span>
+            <span className={pill} style={{ background: colors[n.type]||'#444', color: 'white' }}>{n.type}</span>
           </div>
         ))}
       </div>
@@ -462,19 +507,33 @@ function SocietyMap({ track }: any){
   );
 }
 
-function ReflectionJournal({ track }: any){
+function ReflectionJournal({ track }){
   const KEY = `wp2.journal.${track}`;
-  const [page, setPage] = useLocalState(KEY, { prompt1: '', prompt2: '', prompt3: '' } as any);
+  const [page, setPage] = useLocalState(KEY, {
+    prompt1: '', prompt2: '', prompt3: ''
+  });
   const prompts = track==='teen'
-    ? [ 'When did I choose the harder, better path recently?', 'What research could make my next question stronger?', 'How do I want classmates to describe my brand one year from now?' ]
+    ? [
+        'When did I choose the harder, better path recently?',
+        'What research could make my next question stronger?',
+        'How do I want classmates to describe my brand one year from now?'
+      ]
     : track==='nonprofit'
-    ? [ 'Where does our mission meet community dignity today?', 'What are we measuring that really matters to people we serve?', 'Which risk makes us hesitate — and how can we test it safely?' ]
-    : [ 'What place or species shapes my sense of meaning?', 'Whose perspective have I not included yet?', 'What is one action I can take this month?' ];
+    ? [
+        'Where does our mission meet community dignity today?',
+        'What are we measuring that really matters to people we serve?',
+        'Which risk makes us hesitate — and how can we test it safely?'
+      ]
+    : [
+        'What place or species shapes my sense of meaning?',
+        'Whose perspective have I not included yet?',
+        'What is one action I can take this month?'
+      ];
   return (
     <Section title="Reflection Journal" icon={<BookOpen className="w-4 h-4" />}>
       <div className="grid gap-3">
         {prompts.map((p, i) => (
-          <textarea key={i} className="w-full min-h-20 p-3 rounded-xl border border-black/10 text-sm" placeholder={p} value={(page as any)[`prompt${i+1}`]||''} onChange={e=>setPage((prev:any)=>({ ...prev, [`prompt${i+1}`]: (e.target as any).value }))} />
+          <textarea key={i} className="w-full min-h-20 p-3 rounded-xl border border-black/10 text-sm" placeholder={p} value={page[`prompt${i+1}`]||''} onChange={e=>setPage(prev=>({ ...prev, [`prompt${i+1}`]: e.target.value }))} />
         ))}
       </div>
       <div className="text-xs opacity-70 mt-2">Private to your browser. Export is coming next if you want a PDF of reflections.</div>
@@ -482,10 +541,12 @@ function ReflectionJournal({ track }: any){
   );
 }
 
-function Workbench({ mapToken, csvRows, setCsvRows }: any){
+// ---- Workbench ----
+function Workbench({ mapToken, csvRows, setCsvRows }){
   const [status, setStatus] = useState("");
-  const [series, setSeries] = useState<any[]>([]);
-  function onFile(file: File){
+  const [series, setSeries] = useState([]);
+
+  function onFile(file){
     const r = new FileReader();
     r.onload = () => {
       try {
@@ -497,19 +558,20 @@ function Workbench({ mapToken, csvRows, setCsvRows }: any){
         const tmpIdx = headers.findIndex(h => /temp|celsius|degc/i.test(h));
         const rows = lines.slice(1).map((ln,i)=>{ const parts = ln.split(','); return { t: parts[tIdx] || String(i), pH: phIdx>=0? Number(parts[phIdx]) : undefined, tempC: tmpIdx>=0? Number(parts[tmpIdx]) : undefined }; });
         setCsvRows(rows);
-        setSeries(rows.map((r:any,i:number)=> ({ t: r.t || String(i), pH: r.pH ?? (7 + Math.sin(i/3)*0.2), tempC: r.tempC ?? (16 + Math.cos(i/4)*2.0) })));
+        setSeries(rows.map((r,i)=> ({ t: r.t || String(i), pH: r.pH ?? (7 + Math.sin(i/3)*0.2), tempC: r.tempC ?? (16 + Math.cos(i/4)*2.0) })));
         setStatus(`Loaded ${rows.length} rows`);
       } catch { setStatus('Could not parse CSV'); }
     };
     r.readAsText(file);
   }
+
   return (
     <div className="grid lg:grid-cols-5 gap-6">
       <div className="lg:col-span-3 space-y-6">
         <Section title="Upload & Chart" icon={<BookOpen className="w-4 h-4" />}>
           <div className="text-sm opacity-80">Upload a CSV to see quick trends. Use columns like time, pH, tempC.</div>
           <div className="mt-3 flex items-center gap-2">
-            <input type="file" accept=".csv" onChange={(e)=>{ const f = (e.target as any).files?.[0]; if (f) onFile(f); }} />
+            <input type="file" accept=".csv" onChange={(e)=>{ const f = e.target.files?.[0]; if (f) onFile(f); }} />
             <span className="text-xs opacity-70">{status}</span>
           </div>
           <div className="h-56 mt-4">
@@ -526,10 +588,12 @@ function Workbench({ mapToken, csvRows, setCsvRows }: any){
             </ResponsiveContainer>
           </div>
         </Section>
+
         <Section id="map" title="Map Layers" icon={<Map className="w-4 h-4" />}>
           <MapPane token={mapToken} />
         </Section>
       </div>
+
       <div className="lg:col-span-2 space-y-6">
         <Section title="Time Budget (Pie)" icon={<Star className="w-4 h-4" />}>
           <TimeBudget />
@@ -540,28 +604,30 @@ function Workbench({ mapToken, csvRows, setCsvRows }: any){
 }
 
 function TimeBudget(){
-  const [items, setItems] = useLocalState('wp2.time', [ { label: 'Study', value: 6 }, { label: 'Field', value: 4 }, { label: 'Community', value: 3 }, { label: 'Rest', value: 3 } ]);
-  const total = (items as any[]).reduce((a,b)=>a+Number((b as any).value||0),0)||1;
+  const [items, setItems] = useLocalState('wp2.time', [
+    { label: 'Study', value: 6 }, { label: 'Field', value: 4 }, { label: 'Community', value: 3 }, { label: 'Rest', value: 3 }
+  ]);
+  const total = items.reduce((a,b)=>a+Number(b.value||0),0)||1;
   const colors = ["#5aa870", "#f5a524", "#2563eb", "#a78bfa", "#f472b6", "#111827"];
-  function update(i: number, key: string, v: any){ setItems((prev:any[]) => prev.map((it,idx)=> idx===i ? { ...it, [key]: key==='value'? Number(v): v } : it)); }
-  function add(){ setItems((prev:any[]) => [...prev, { label: 'New', value: 1 }]); }
+  function update(i, key, v){ setItems(prev => prev.map((it,idx)=> idx===i ? { ...it, [key]: key==='value'? Number(v): v } : it)); }
+  function add(){ setItems(prev => [...prev, { label: 'New', value: 1 }]); }
   return (
     <div className="grid md:grid-cols-2 gap-4 items-center">
       <div className="h-60">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
-            <Pie data={items as any[]} dataKey="value" nameKey="label" outerRadius={90}>
-              {(items as any[]).map((_, i) => <Cell key={i} fill={colors[i % colors.length]} />)}
+            <Pie data={items} dataKey="value" nameKey="label" outerRadius={90}>
+              {items.map((_, i) => <Cell key={i} fill={colors[i % colors.length]} />)}
             </Pie>
-            <Tooltip formatter={(v:any, n:any)=>[`${v} hrs`, n]} />
+            <Tooltip formatter={(v, n)=>[`${v} hrs`, n]} />
           </PieChart>
         </ResponsiveContainer>
       </div>
       <div className="grid gap-2 text-sm">
-        {(items as any[]).map((it:any, i:number) => (
+        {items.map((it, i) => (
           <div key={i} className="flex gap-2 items-center">
-            <input className="flex-1 p-2 rounded-lg border border-black/10" value={it.label} onChange={e=>update(i,'label',(e.target as any).value)} />
-            <input type="number" min="0" className="w-20 p-2 rounded-lg border border-black/10" value={it.value} onChange={e=>update(i,'value',(e.target as any).value)} />
+            <input className="flex-1 p-2 rounded-lg border border-black/10" value={it.label} onChange={e=>update(i,'label',e.target.value)} />
+            <input type="number" min="0" className="w-20 p-2 rounded-lg border border-black/10" value={it.value} onChange={e=>update(i,'value',e.target.value)} />
             <span className="text-xs opacity-70">{Math.round((Number(it.value||0)/total)*100)}%</span>
           </div>
         ))}
@@ -571,19 +637,20 @@ function TimeBudget(){
   );
 }
 
-function MapPane({ token }: any){
-  const ref = useRef<HTMLDivElement | null>(null);
+function MapPane({ token }){
+  const ref = useRef(null);
   const [err, setErr] = useState("");
   const [ready, setReady] = useState(false);
+
   useEffect(() => {
-    let map: any = null; let cleanup = () => {};
+    let map = null; let cleanup = () => {};
     (async () => {
       try {
         const mb = await import(/* @vite-ignore */ 'mapbox-gl').catch(() => null);
         if (!mb || !mb.default) { setErr('Map library unavailable'); return; }
-        const mapboxgl = mb.default as any;
+        const mapboxgl = mb.default;
         if (token) mapboxgl.accessToken = token;
-        const style: any = token ? 'mapbox://styles/mapbox/light-v11' : {
+        const style = token ? 'mapbox://styles/mapbox/light-v11' : {
           version: 8,
           sources: { osm: { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256, attribution: '© OpenStreetMap' } },
           layers: [ { id: 'osm', type: 'raster', source: 'osm' } ]
@@ -607,6 +674,7 @@ function MapPane({ token }: any){
     })();
     return () => cleanup();
   }, [token]);
+
   return (
     <div>
       <div ref={ref} className="w-full h-72 rounded-xl border border-black/10" />
@@ -616,3 +684,104 @@ function MapPane({ token }: any){
   );
 }
 
+// ---- Quick Quiz ----
+function QuickQuiz({ bank }){
+  const [idx, setIdx] = useState(0);
+  const [val, setVal] = useState("");
+  const [res, setRes] = useState(null);
+  const q = bank[idx % (bank.length || 1)] || { q: 'No questions yet', a: '' };
+  function check(){
+    const u = (val||'').toLowerCase();
+    const a = (q.a||'').toLowerCase();
+    const ok = u && (u.includes(a.split(' ')[0]) || a.includes(u.split(' ')[0]));
+    setRes(ok ? 'correct' : 'try again');
+  }
+  function next(){ setRes(null); setVal(''); setIdx(i => i + 1); }
+  return (
+    <div>
+      <div className="text-sm font-medium" style={{ color: THEME.coal }}>{q.q}</div>
+      <input value={val} onChange={e=>setVal(e.target.value)} placeholder="Your answer…" className="mt-2 w-full p-2 rounded-lg border border-black/10 text-sm" />
+      <div className="mt-2 flex gap-2">
+        <button onClick={check} className="px-3 py-1.5 rounded-lg text-sm border border-black/10">Check</button>
+        <button onClick={next} className="px-3 py-1.5 rounded-lg text-sm text-white" style={{ background: THEME.leaf }}>Next</button>
+      </div>
+      {res && (<div className="mt-2 text-sm">{res === 'correct' ? <span className="text-green-700">Nice. That matches the key idea.</span> : <span className="opacity-80">Close. Check wording and key concepts.</span>}</div>)}
+    </div>
+  );
+}
+
+// ---- Resources ----
+function Resources({ track }){
+  const LinkItem = ({ href, label }) => (
+    <a href={href} target="_blank" rel="noreferrer" className="block px-3 py-2 rounded-lg border border-black/10 hover:bg-black/[.04]">{label}</a>
+  );
+  return (
+    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {track !== 'nonprofit' && (
+        <Section title="Conservation AI" icon={<Trees className="w-4 h-4" />}>
+          <div className="grid gap-2">
+            <LinkItem href="https://www.wildlabs.net/" label="Wildlabs — Wildlife tech community" />
+            <LinkItem href="https://globalfishingwatch.org/" label="Global Fishing Watch — Transparency mapping" />
+            <LinkItem href="https://developers.planet.com/" label="Planet Labs — Satellite data" />
+          </div>
+        </Section>
+      )}
+      <Section title="AI for Good" icon={<Brain className="w-4 h-4" />}>
+        <div className="grid gap-2">
+          <LinkItem href="https://www.microsoft.com/en-us/ai/ai-for-earth" label="Microsoft AI for Earth" />
+          <LinkItem href="https://conservationxlabs.com/" label="Conservation X Labs" />
+          <LinkItem href="https://www.codeforamerica.org/" label="Code for America" />
+        </div>
+      </Section>
+      {track === 'teen' && (
+        <Section title="Teen Learn" icon={<Sparkles className="w-4 h-4" />}>
+          <div className="grid gap-2">
+            <LinkItem href="https://p5js.org/" label="p5.js — Creative coding" />
+            <LinkItem href="https://www.khanacademy.org/" label="Khan Academy — Foundations" />
+            <LinkItem href="https://earthengine.google.com/" label="Earth Engine — Environmental data" />
+          </div>
+        </Section>
+      )}
+    </div>
+  );
+}
+
+// ---- Admin ----
+function Admin({ mapToken, setMapToken }){
+  return (
+    <div className="grid md:grid-cols-2 gap-6">
+      <Section title="Map Settings" icon={<Map className="w-4 h-4" />}>
+        <div className="text-sm opacity-80">Add a public Mapbox token to enable vector styles. Without a token we use OSM raster.</div>
+        <input value={mapToken} onChange={e=>setMapToken(e.target.value)} placeholder="pk. public token" className="mt-2 w-full p-2 rounded-lg border border-black/10 text-sm" />
+      </Section>
+      <Section title="Guidance" icon={<HelpCircle className="w-4 h-4" />}>
+        <ul className="list-disc pl-5 text-sm space-y-1">
+          <li>Deep Dive data stays in your browser. For workshops, consider an optional export toggle.</li>
+          <li>GitHub Pages ready. Render <code>&lt;WildPraxisV2App /&gt;</code> in your entry file.</li>
+        </ul>
+      </Section>
+    </div>
+  );
+}
+
+// ---- Footer ----
+function Footer(){
+  return (
+    <footer className="py-10 mt-8 border-t border-black/5">
+      <div className="mx-auto max-w-7xl px-4 grid md:grid-cols-3 gap-6 text-sm">
+        <div>
+          <h4 className="font-semibold mb-1" style={{ color: THEME.coal }}>About</h4>
+          <p className="opacity-70">WildPraxis v2 adds a Deep Dive to explore self worth, inner meaning, and society — with practical tools for each track.</p>
+        </div>
+        <div>
+          <h4 className="font-semibold mb-1" style={{ color: THEME.coal }}>Branding</h4>
+          <p className="opacity-70">Adjust THEME tokens to match Wildlife Leadership Academy palette. Teen accents use pink and indigo.</p>
+        </div>
+        <div>
+          <h4 className="font-semibold mb-1" style={{ color: THEME.coal }}>Credits</h4>
+          <p className="opacity-70">Icons: lucide-react • Charts: Recharts • Maps: OpenStreetMap / Mapbox GL (token optional).</p>
+        </div>
+      </div>
+    </footer>
+  );
+}
