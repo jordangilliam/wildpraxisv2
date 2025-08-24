@@ -1,9 +1,8 @@
-/* The full WildPraxis v2 app provided by the user, adapted to TSX with no raw '>' in JSX */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Brain, Trees, Users, Compass, BookOpen, Lightbulb, FlaskConical, Globe2, Settings,
-  HelpCircle, CheckCircle2, Circle, Leaf, FileDown, Copy, Sparkles, Handshake, Map,
-  Heart, Target, Scale, Star
+  HelpCircle, CheckCircle2, Circle, Leaf, Copy, Sparkles, Handshake, Map,
+  Heart, Target, Scale, Star, X, ChevronLeft, ChevronRight
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -11,11 +10,21 @@ import {
   PieChart, Pie, Cell
 } from "recharts";
 
-const THEME = { forest: "#1f3d2a", leaf: "#5aa870", gold: "#f5a524", coal: "#0f172a", mist: "#f7faf7", teenPink: "#f472b6", teenIndigo: "#6366f1" } as const;
+// ---- THEME ----
+const THEME = {
+  forest: "#1f3d2a",
+  leaf: "#5aa870",
+  gold: "#f5a524",
+  coal: "#0f172a",
+  mist: "#f7faf7",
+  teenPink: "#f472b6",
+  teenIndigo: "#6366f1",
+} as const;
 const shadow = "shadow-[0_10px_30px_rgba(0,0,0,0.12)]";
 const cardBase = `rounded-2xl ${shadow} border border-black/5 bg-white`;
 const pill = "px-2.5 py-1 rounded-full text-xs font-semibold";
 
+// ---- Local Storage Hook ----
 function useLocalState<T = any>(key: string, initial: T) {
   const [value, setValue] = useState<T>(() => {
     try { const raw = localStorage.getItem(key); return raw ? (JSON.parse(raw) as T) : initial; } catch { return initial; }
@@ -24,17 +33,10 @@ function useLocalState<T = any>(key: string, initial: T) {
   return [value, setValue] as const;
 }
 
-function classNames(...xs: Array<string | false | null | undefined>) { return xs.filter(Boolean).join(" "); }
-
 // ---- Helpers ----
-// Text similarity helpers (no regex literals so the canvas patcher stays happy)
-function tokenizeWords(s: string){ s=(s||'').toLowerCase(); const words: string[]=[]; let cur=''; for(const ch of s){ const code=ch.charCodeAt(0); const isAlnum=(code>=48&&code<=57)||(code>=97&&code<=122); if(isAlnum){ cur+=ch; } else { if(cur){ words.push(cur); cur=''; } } } if(cur) words.push(cur); return words; }
-function jaccardTokens(a: string,b: string){ const A=new Set(tokenizeWords(a)); const B=new Set(tokenizeWords(b)); const inter=[...A].filter(x=>B.has(x)).length; return inter/Math.max(1, A.size+B.size-inter); }
-function collapseWhitespace(s: string){ let out=''; let ws=false; for(const ch of (s||'').toLowerCase()){ const isSpace=(ch===' '||ch==='\n'||ch==='\t'||ch==='\r'); if(isSpace){ if(!ws){ out+=' '; ws=true; } } else { out+=ch; ws=false; } } return out; }
-function ngramVecStr(s: string,n=3){ const t=collapseWhitespace(s); const m=new Map<string, number>(); for(let i=0;i<=Math.max(0,t.length-n); i++){ const g=t.slice(i,i+n); if(g.indexOf(' ')>=0) continue; m.set(g,(m.get(g)||0)+1); } return m; }
-function cosineSimStr(a: string,b: string){ const A=ngramVecStr(a), B=ngramVecStr(b); const keys=new Set<string>([...A.keys(),...B.keys()]); let dot=0,na=0,nb=0; keys.forEach(k=>{ const va=A.get(k)||0, vb=B.get(k)||0; dot+=va*vb; na+=va*va; nb+=vb*vb; }); return dot/(Math.sqrt(na||1)*Math.sqrt(nb||1)); }
+function classNames(...xs: Array<string | false | null | undefined>){ return xs.filter(Boolean).join(" "); }
 
-// Modules (trimmed to user content)
+// ---- Modules: Base content ----
 const MOD_CONSERVATION = [
   { key: "core", icon: <Brain className="w-5 h-5" />, title: "Core Literacy", subtitle: "Models • Ethics • Data",
     color: "from-emerald-500 via-emerald-600 to-emerald-700",
@@ -53,7 +55,7 @@ const MOD_CONSERVATION = [
     lessons: [
       { id: "auto", title: "Automations you can trust", estMins: 14, summary: "Approvals, logs, disclosures.", checkpoints: ["Map a four step flow.", "Two governance controls."] },
     ] },
-];
+] as const;
 
 const MOD_NONPROFIT = [
   { key: "core", icon: <Users className="w-5 h-5" />, title: "AI Literacy for Nonprofits", subtitle: "Models • Access • Value",
@@ -72,7 +74,7 @@ const MOD_NONPROFIT = [
     lessons: [
       { id: "stack", title: "Choose your stack", estMins: 14, summary: "Writing, data, automation, CRM.", checkpoints: ["Pick three tools.", "Two integrations."] },
     ] },
-];
+] as const;
 
 const MOD_TEEN = [
   { key: "core", icon: <Sparkles className="w-5 h-5" />, title: "How AI Works (Teen)", subtitle: "Systems • Prompts • Judgment",
@@ -86,14 +88,16 @@ const MOD_TEEN = [
     lessons: [
       { id: "kit", title: "Build a brand you are proud of", estMins: 12, summary: "Brainstorm content and projects; then make them real.", checkpoints: ["Two projects this month.", "Three post plan."] },
     ] },
-];
+] as const;
 
+// ---- Quiz banks (brief) ----
 const QUIZ: any = {
   conservation: { core: [ { q: "Embeddings help with?", a: "Semantic search and retrieval." } ] },
-  nonprofit: { core: [ { q: "Context window is?", a: "How much recent text a model can see at once." } ] },
-  teen: { core: [ { q: "Prompt skeleton?", a: "Role, goal, constraints, steps; include an example." } ] }
+  nonprofit:   { core: [ { q: "Context window is?", a: "How much recent text a model can see at once." } ] },
+  teen:        { core: [ { q: "Prompt skeleton?", a: "Role, goal, constraints, steps; include an example." } ] }
 };
 
+// ---- App ----
 export default function WildPraxisV2App(){
   const [track, setTrack] = useLocalState("wp2.track", "conservation");
   const [tab, setTab] = useLocalState("wp2.tab", "learn");
@@ -101,8 +105,9 @@ export default function WildPraxisV2App(){
   const [mapToken, setMapToken] = useLocalState("wp2.mapToken", "");
   const [csvRows, setCsvRows] = useState<any[] | null>(null);
   const [activeLesson, setActiveLesson] = useLocalState("wp2.activeLesson", null as any);
-  const modules = track === 'conservation' ? MOD_CONSERVATION : track === 'nonprofit' ? MOD_NONPROFIT : MOD_TEEN;
-  const quizBank = (QUIZ as any)[track].core || [];
+
+  const modules = (track === 'conservation' ? MOD_CONSERVATION : track === 'nonprofit' ? MOD_NONPROFIT : MOD_TEEN) as any[];
+  const quizBank = ((QUIZ as any)[track] && (QUIZ as any)[track].core) || [];
 
   return (
     <div className="min-h-screen" style={{ background: THEME.mist }}>
@@ -113,17 +118,7 @@ export default function WildPraxisV2App(){
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-6">
               <Hero track={track as any} />
-              {activeLesson ? (
-                <LessonRunner active={activeLesson as any} track={track as any} onExit={()=>setActiveLesson(null as any)} />
-              ) : (
-                modules.map(m => (
-                  <ModuleCard
-                    key={m.key}
-                    module={m}
-                    onStart={(lesson: any)=>setActiveLesson({ moduleKey: m.key, lessonId: lesson.id, title: lesson.title } as any)}
-                  />
-                ))
-              )}
+              {modules.map((m: any) => <ModuleCard key={m.key} module={m} onStart={(lesson: any)=> setActiveLesson({ moduleKey: m.key, lessonId: lesson.id } as any)} />)}
             </div>
             <div className="space-y-6">
               <Section title="Quick Quiz" icon={<Brain className="w-4 h-4" />}>
@@ -138,16 +133,31 @@ export default function WildPraxisV2App(){
 
         {tab === 'explore' && <Explore track={track as any} />}
         {tab === 'deep' && <DeepDive track={track as any} />}
-        {tab === 'workbench' && <Workbench mapToken={mapToken as any} csvRows={csvRows as any} setCsvRows={setCsvRows as any} />}
+        {tab === 'workbench' && (
+          <Workbench mapToken={mapToken as any} csvRows={csvRows as any} setCsvRows={setCsvRows as any} />
+        )}
         {tab === 'resources' && <Resources track={track as any} />}
-        {tab === 'admin' && <Admin mapToken={mapToken as any} setMapToken={setMapToken as any} />}
+        {tab === 'admin' && (
+          <Admin mapToken={mapToken as any} setMapToken={setMapToken as any} />
+        )}
       </main>
+
+      {activeLesson && (
+        <LessonSheet
+          track={track as any}
+          modules={modules as any}
+          active={activeLesson as any}
+          onClose={()=>setActiveLesson(null as any)}
+          onJump={(mId: string, lId: string)=> setActiveLesson({ moduleKey: mId, lessonId: lId } as any)}
+        />
+      )}
 
       <Footer />
     </div>
   );
 }
 
+// ---- Header ----
 function Header({ track, tab, setTab, setTrack }: any){
   return (
     <header className="sticky top-0 z-30 backdrop-blur supports-[backdrop-filter]:bg-white/60 bg-white/70 border-b border-black/5">
@@ -187,6 +197,7 @@ function Tab({ label, icon, active, onClick }: any){
   );
 }
 
+// ---- Hero ----
 function Hero({ track }: any){
   const title = track === 'nonprofit' ? 'Understand AI. Build capacity. Protect your mission.' : track === 'teen' ? 'Create with care. Learn how systems work and build things that matter.' : 'Learn AI like a systems thinker. Serve people and places.';
   const tagLeft = track === 'nonprofit' ? 'Nonprofit Leaders' : track === 'teen' ? 'Teen Track' : 'Conservation Leaders';
@@ -222,9 +233,9 @@ function Section({ title, icon, children, id }: any){
 }
 
 function ModuleCard({ module, onStart }: any){
-  const [done, setDone] = useLocalState(`wp2.done.${module.key}`, {} as any);
+  const [done] = useLocalState(`wp2.done.${module.key}`, {} as any);
   return (
-    <div className={classNames(cardBase, "overflow-hidden")}>
+    <div className={classNames(cardBase, "overflow-hidden")} role="region" aria-label={`${module.title} module`}>
       <div className="px-6 py-5 border-b border-black/5" style={{ background: THEME.mist }}>
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white" style={{ background: THEME.forest }}>{module.icon}</div>
@@ -236,10 +247,12 @@ function ModuleCard({ module, onStart }: any){
       </div>
       <div className="p-5 grid gap-4">
         {module.lessons.map((l: any) => (
-          <div key={l.id} className="p-4 rounded-xl border border-black/10">
+          <button key={l.id}
+                  onClick={()=> onStart && onStart(l)}
+                  className="text-left p-4 rounded-xl border border-black/10 hover:bg-black/[.03] active:bg-black/[.05] focus:outline-none focus:ring-2 focus:ring-black/10">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <div className="font-semibold" style={{ color: THEME.coal }}>{l.title}</div>
+                <div className="font-semibold text-base" style={{ color: THEME.coal }}>{l.title}</div>
                 <div className="text-sm opacity-70">{l.summary}</div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {l.checkpoints.map((c: string, idx: number) => (
@@ -248,20 +261,86 @@ function ModuleCard({ module, onStart }: any){
                 </div>
                 <div className="mt-3 text-xs opacity-70">~{l.estMins} mins</div>
               </div>
-              <div className="flex items-center gap-2">
-                <button onClick={()=> onStart && onStart(l)} className="px-3 py-1.5 rounded-lg text-sm border border-black/10">Start</button>
-                <button onClick={() => setDone((prev: any) => ({ ...prev, [l.id]: !prev[l.id] }))} className={classNames("px-3 py-1.5 rounded-lg text-sm border", (done as any)[l.id] ? "border-green-600 text-green-700" : "border-black/10")}>
-                  {(done as any)[l.id] ? <CheckCircle2 className="inline w-4 h-4 mr-1" /> : <Circle className="inline w-4 h-4 mr-1" />}Done
-                </button>
-              </div>
+              <span className={classNames("px-2.5 py-1 rounded-lg text-xs border", (done as any)[l.id] ? "border-green-600 text-green-700" : "border-black/10")}>{(done as any)[l.id] ? 'Done' : 'Start'}</span>
             </div>
-          </div>
+          </button>
         ))}
       </div>
     </div>
   );
 }
 
+// ---- iPad-friendly Lesson Sheet ----
+function LessonSheet({ track, modules, active, onClose, onJump }: any){
+  const { moduleKey, lessonId } = active || {};
+  const module = (modules as any[]).find((m: any) => m.key === moduleKey) || (modules as any[])[0];
+  const idx = Math.max(0, (module.lessons as any[]).findIndex((l: any) => l.id === lessonId));
+  const lesson = (module.lessons as any[])[idx] || (module.lessons as any[])[0];
+  const doneKey = `wp2.done.${module.key}`;
+  const [done, setDone] = useLocalState(doneKey, {} as any);
+  const [checks, setChecks] = useLocalState(`wp2.lesson.${module.key}.${lesson.id}.checks`, Array((lesson.checkpoints as any[]).length).fill(false) as any);
+  const [notes, setNotes] = useLocalState(`wp2.lesson.${module.key}.${lesson.id}.notes`, "");
+
+  function markComplete(){ setDone((prev: any) => ({ ...prev, [lesson.id]: true })); }
+  function toggleCheck(i: number){ setChecks((prev: any[]) => prev.map((v,idx)=> idx===i ? !v : v)); }
+  function nav(delta: number){
+    const nextIdx = idx + delta;
+    if (nextIdx < 0){
+      const mIx = Math.max(0, (modules as any[]).findIndex((m:any)=>m.key===module.key) - 1);
+      const prevMod = (modules as any[])[mIx];
+      onJump(prevMod.key, (prevMod.lessons as any[])[(prevMod.lessons as any[]).length-1].id);
+    } else if (nextIdx >= (module.lessons as any[]).length){
+      const mIx = (modules as any[]).findIndex((m:any)=>m.key===module.key) + 1;
+      const nextMod = (modules as any[])[mIx] || (modules as any[])[(modules as any[]).length-1];
+      onJump(nextMod.key, (nextMod.lessons as any[])[0].id);
+    } else {
+      onJump(module.key, (module.lessons as any[])[nextIdx].id);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-x-0 bottom-0 md:inset-y-8 md:mx-auto md:max-w-3xl md:rounded-2xl bg-white border border-black/10 shadow-2xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-black/10 flex items-center justify-between" style={{ background: THEME.mist }}>
+          <div className="flex items-center gap-2">
+            <span className={pill} style={{ background: THEME.gold }}>{module.title}</span>
+            <span className="text-sm font-semibold" style={{ color: THEME.coal }}>{lesson.title}</span>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-black/[.06]" aria-label="Close"><X className="w-5 h-5"/></button>
+        </div>
+        <div className="p-4 md:p-6 grid gap-4">
+          <div className="text-sm opacity-80">{lesson.summary}</div>
+          <div className="grid gap-2">
+            <div className="text-sm font-medium" style={{ color: THEME.coal }}>Checklist</div>
+            {(lesson.checkpoints as any[]).map((c,i)=> (
+              <label key={i} className="flex items-center gap-2 text-sm">
+                <input type="checkbox" className="w-5 h-5" checked={!!(checks as any[])[i]} onChange={()=>toggleCheck(i)} />
+                <span>{c}</span>
+              </label>
+            ))}
+          </div>
+          <div className="grid gap-2">
+            <div className="text-sm font-medium" style={{ color: THEME.coal }}>Notes</div>
+            <textarea className="w-full h-28 p-3 rounded-xl border border-black/10 text-sm" placeholder="Jot your ideas, actions, or links…" value={notes as any} onChange={e=>setNotes((e.target as any).value)} />
+          </div>
+        </div>
+        <div className="px-4 py-3 border-t border-black/10 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <button onClick={()=>nav(-1)} className="px-3 py-2 rounded-lg border border-black/10 flex items-center gap-1 text-sm"><ChevronLeft className="w-4 h-4"/> Prev</button>
+            <button onClick={()=>nav(1)} className="px-3 py-2 rounded-lg border border-black/10 flex items-center gap-1 text-sm">Next <ChevronRight className="w-4 h-4"/></button>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs opacity-70">~{lesson.estMins} mins</span>
+            <button onClick={markComplete} className="px-3 py-2 rounded-lg text-sm text-white" style={{ background: THEME.leaf }}>Mark Complete</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---- Explore ----
 function Explore({ track }: any){
   if (track === 'nonprofit') return <NPScenarios/>;
   if (track === 'teen') return <TeenStudio/>;
@@ -277,7 +356,7 @@ function CaseCard({ title, tag, summary, prompts }: any){
         <span className={pill} style={{ background: THEME.gold }}>{tag}</span>
       </div>
       <p className="mt-2 text-sm opacity-80">{summary}</p>
-      <ul className="mt-3 list-disc pl-5 text-sm space-y-1">{prompts.map((p: string, i: number) => <li key={i}>{p}</li>)}</ul>
+      <ul className="mt-3 list-disc pl-5 text-sm space-y-1">{(prompts as any[]).map((p, i) => <li key={i}>{p}</li>)}</ul>
       {reveal && (<div className="mt-3 text-xs p-2 rounded-lg" style={{ background: THEME.mist }}><strong>Nudge:</strong> start simple — baseline before complex models.</div>)}
     </div>
   );
@@ -341,7 +420,28 @@ function TeenStudio(){
   const [prompts, setPrompts] = useState("");
 
   function makePrompts(){
-    const tpl = `# Brand Builder Prompts\n\n1) Reflect on strengths\nRole: coach. Goal: find themes. Inputs: ${strengths || "[paste strengths]"}.\nAsk: what themes connect these and which projects fit me.\n\n2) Spot skill gaps\nRole: mentor. Goal: plan improvements. Inputs: ${weaknesses || "[paste weaknesses]"}.\nAsk: give a two week plan with resources.\n\n3) Portfolio review\nRole: hiring manager. Goal: objective feedback. Inputs: ${links || "[links to work]"}.\nAsk: what is strongest and what is missing.\n\n4) Resume edit\nRole: editor. Goal: clear bullets. Inputs: ${resume || "[paste resume]"}.\nAsk: rewrite bullets with action, impact, and evidence.\n\n5) Project starter\nRole: product partner. Goal: scope a real project in conservation, art, or science.\nInputs: ${story || "[your story]"}.\nAsk: write milestones for four weeks, two hours each week, with deliverables.`;
+    const tpl = `# Brand Builder Prompts
+
+1) Reflect on strengths
+Role: coach. Goal: find themes. Inputs: ${strengths || "[paste strengths]"}.
+Ask: what themes connect these and which projects fit me.
+
+2) Spot skill gaps
+Role: mentor. Goal: plan improvements. Inputs: ${weaknesses || "[paste weaknesses]"}.
+Ask: give a two week plan with resources.
+
+3) Portfolio review
+Role: hiring manager. Goal: objective feedback. Inputs: ${links || "[links to work]"}.
+Ask: what is strongest and what is missing.
+
+4) Resume edit
+Role: editor. Goal: clear bullets. Inputs: ${resume || "[paste resume]"}.
+Ask: rewrite bullets with action, impact, and evidence.
+
+5) Project starter
+Role: product partner. Goal: scope a real project in conservation, art, or science.
+Inputs: ${story || "[your story]"}.
+Ask: write milestones for four weeks, two hours each week, with deliverables.`;
     setPrompts(tpl);
   }
   function copyAll(){ if (!prompts) return; (navigator as any).clipboard?.writeText(prompts).catch(()=>{}); }
@@ -379,6 +479,7 @@ function TeenStudio(){
   );
 }
 
+// ---- Deep Dive ----
 function DeepDive({ track }: any){
   return (
     <div className="grid lg:grid-cols-5 gap-6">
@@ -396,15 +497,17 @@ function DeepDive({ track }: any){
 
 function ValuesCompass({ track }: any){
   const KEY = `wp2.values.${track}`;
-  const [vals, setVals] = useLocalState(KEY, { Integrity: 3, Service: 3, Curiosity: 3, Craft: 3, Community: 3, Sustainability: 3 });
-  const data = useMemo(() => Object.keys(vals).map(k => ({ axis: k, value: Number((vals as any)[k]||0) })), [vals]);
+  const [vals, setVals] = useLocalState(KEY, {
+    Integrity: 3, Service: 3, Curiosity: 3, Craft: 3, Community: 3, Sustainability: 3,
+  } as any);
+  const data = useMemo(() => Object.keys(vals as any).map(k => ({ axis: k, value: Number((vals as any)[k]||0) })), [vals]);
   const set = (k: string, v: any) => setVals((prev: any) => ({ ...prev, [k]: Number(v) }));
   return (
     <Section title="Inner Compass: Values Radar" icon={<Target className="w-4 h-4" />}>
       <div className="grid md:grid-cols-2 gap-4 items-center">
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
-            <RadarChart data={data} outerRadius="80%">
+            <RadarChart data={data as any} outerRadius="80%">
               <PolarGrid />
               <PolarAngleAxis dataKey="axis" tick={{ fontSize: 11 }} />
               <Radar dataKey="value" stroke="#5aa870" fill="#5aa870" fillOpacity={0.35} />
@@ -412,7 +515,7 @@ function ValuesCompass({ track }: any){
           </ResponsiveContainer>
         </div>
         <div className="grid grid-cols-2 gap-3 text-sm">
-          {Object.keys(vals).map((k) => (
+          {Object.keys(vals as any).map((k) => (
             <label key={k} className="flex flex-col">
               <span className="mb-1 font-medium" style={{ color: THEME.coal }}>{k}</span>
               <input type="range" min="0" max="5" value={(vals as any)[k]} onChange={(e)=>set(k, (e.target as any).value)} />
@@ -455,11 +558,14 @@ function PurposeBuilder({ track }: any){
 
 function SocietyMap({ track }: any){
   const KEY = `wp2.society.${track}`;
-  const [nodes, setNodes] = useLocalState(KEY, [ { name: 'Community', type: 'ally' }, { name: 'Environment', type: 'beneficiary' } ]);
+  const [nodes, setNodes] = useLocalState(KEY, [
+    { name: 'Community', type: 'ally' },
+    { name: 'Environment', type: 'beneficiary' },
+  ] as any);
   const [name, setName] = useState("");
   const [type, setType] = useState("ally");
   const colors: any = { ally: '#5aa870', funder: '#f5a524', regulator: '#2563eb', beneficiary: '#0ea5e9', peer: '#a78bfa' };
-  function add(){ const nm = name.trim(); if (!nm) return; setNodes((prev: any)=>[...prev, { name: nm, type }]); setName(""); }
+  function add(){ if (!name.trim()) return; setNodes((prev: any)=>[...prev, { name: name.trim(), type }]); setName(""); }
   return (
     <Section title="Society Sketch" icon={<Scale className="w-4 h-4" />}>
       <div className="text-sm opacity-80">Map relationships: who benefits, who decides, who helps. Keep names respectful; this stays on your device.</div>
@@ -488,12 +594,26 @@ function SocietyMap({ track }: any){
 
 function ReflectionJournal({ track }: any){
   const KEY = `wp2.journal.${track}`;
-  const [page, setPage] = useLocalState(KEY, { prompt1: '', prompt2: '', prompt3: '' } as any);
+  const [page, setPage] = useLocalState(KEY, {
+    prompt1: '', prompt2: '', prompt3: ''
+  } as any);
   const prompts = track==='teen'
-    ? [ 'When did I choose the harder, better path recently?', 'What research could make my next question stronger?', 'How do I want classmates to describe my brand one year from now?' ]
+    ? [
+        'When did I choose the harder, better path recently?',
+        'What research could make my next question stronger?',
+        'How do I want classmates to describe my brand one year from now?'
+      ]
     : track==='nonprofit'
-    ? [ 'Where does our mission meet community dignity today?', 'What are we measuring that really matters to people we serve?', 'Which risk makes us hesitate — and how can we test it safely?' ]
-    : [ 'What place or species shapes my sense of meaning?', 'Whose perspective have I not included yet?', 'What is one action I can take this month?' ];
+    ? [
+        'Where does our mission meet community dignity today?',
+        'What are we measuring that really matters to people we serve?',
+        'Which risk makes us hesitate — and how can we test it safely?'
+      ]
+    : [
+        'What place or species shapes my sense of meaning?',
+        'Whose perspective have I not included yet?',
+        'What is one action I can take this month?'
+      ];
   return (
     <Section title="Reflection Journal" icon={<BookOpen className="w-4 h-4" />}>
       <div className="grid gap-3">
@@ -506,9 +626,11 @@ function ReflectionJournal({ track }: any){
   );
 }
 
+// ---- Workbench ----
 function Workbench({ mapToken, csvRows, setCsvRows }: any){
   const [status, setStatus] = useState("");
   const [series, setSeries] = useState<any[]>([]);
+
   function onFile(file: File){
     const r = new FileReader();
     r.onload = () => {
@@ -527,6 +649,7 @@ function Workbench({ mapToken, csvRows, setCsvRows }: any){
     };
     r.readAsText(file);
   }
+
   return (
     <div className="grid lg:grid-cols-5 gap-6">
       <div className="lg:col-span-3 space-y-6">
@@ -550,10 +673,12 @@ function Workbench({ mapToken, csvRows, setCsvRows }: any){
             </ResponsiveContainer>
           </div>
         </Section>
+
         <Section id="map" title="Map Layers" icon={<Map className="w-4 h-4" />}>
           <MapPane token={mapToken} />
         </Section>
       </div>
+
       <div className="lg:col-span-2 space-y-6">
         <Section title="Time Budget (Pie)" icon={<Star className="w-4 h-4" />}>
           <TimeBudget />
@@ -564,7 +689,9 @@ function Workbench({ mapToken, csvRows, setCsvRows }: any){
 }
 
 function TimeBudget(){
-  const [items, setItems] = useLocalState('wp2.time', [ { label: 'Study', value: 6 }, { label: 'Field', value: 4 }, { label: 'Community', value: 3 }, { label: 'Rest', value: 3 } ]);
+  const [items, setItems] = useLocalState('wp2.time', [
+    { label: 'Study', value: 6 }, { label: 'Field', value: 4 }, { label: 'Community', value: 3 }, { label: 'Rest', value: 3 }
+  ] as any);
   const total = (items as any[]).reduce((a,b)=>a+Number((b as any).value||0),0)||1;
   const colors = ["#5aa870", "#f5a524", "#2563eb", "#a78bfa", "#f472b6", "#111827"];
   function update(i: number, key: string, v: any){ setItems((prev:any[]) => prev.map((it,idx)=> idx===i ? { ...it, [key]: key==='value'? Number(v): v } : it)); }
@@ -599,6 +726,7 @@ function MapPane({ token }: any){
   const ref = useRef<HTMLDivElement | null>(null);
   const [err, setErr] = useState("");
   const [ready, setReady] = useState(false);
+
   useEffect(() => {
     let map: any = null; let cleanup = () => {};
     (async () => {
@@ -631,6 +759,7 @@ function MapPane({ token }: any){
     })();
     return () => cleanup();
   }, [token]);
+
   return (
     <div>
       <div ref={ref} className="w-full h-72 rounded-xl border border-black/10" />
@@ -640,298 +769,106 @@ function MapPane({ token }: any){
   );
 }
 
-
-// ---- Interactive Lessons ----
-function LessonRunner({ active, track, onExit }: any){
-  const { lessonId, title } = active || {};
+// ---- Quick Quiz ----
+function QuickQuiz({ bank }: any){
+  const [idx, setIdx] = useState(0);
+  const [val, setVal] = useState("");
+  const [res, setRes] = useState(null as any);
+  const q = (bank as any[])[idx % ((bank as any[]).length || 1)] || { q: 'No questions yet', a: '' };
+  function check(){
+    const u = (val||'').toLowerCase();
+    const a = (q.a||'').toLowerCase();
+    const ok = u && (u.includes(a.split(' ')[0]) || a.includes(u.split(' ')[0]));
+    setRes(ok ? 'correct' : 'try again');
+  }
+  function next(){ setRes(null); setVal(''); setIdx(i => i + 1); }
   return (
-    <div className={classNames(cardBase, "p-5")}>
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="text-xs opacity-70">Interactive Lesson</div>
-          <h3 className="text-lg font-semibold" style={{ color: THEME.coal }}>{title}</h3>
-        </div>
-        <button onClick={onExit} className="px-3 py-1.5 rounded-lg text-sm border border-black/10">Exit</button>
+    <div>
+      <div className="text-sm font-medium" style={{ color: THEME.coal }}>{q.q}</div>
+      <input value={val} onChange={e=>setVal((e.target as any).value)} placeholder="Your answer…" className="mt-2 w-full p-2 rounded-lg border border-black/10 text-sm" />
+      <div className="mt-2 flex gap-2">
+        <button onClick={check} className="px-3 py-1.5 rounded-lg text-sm border border-black/10">Check</button>
+        <button onClick={next} className="px-3 py-1.5 rounded-lg text-sm text-white" style={{ background: THEME.leaf }}>Next</button>
       </div>
-      <div className="mt-4">
-        {lessonId === 'foundations' && <LessonCoreFoundations />}
-        {lessonId === 'ethics' && <LessonEthics />}
-        {lessonId === 'sensors' && <LessonSensorsAlerts />}
-        {lessonId === 'gis' && <LessonGISCare />}
-        {lessonId === 'auto' && <LessonAutomationsTrust />}
-        {!['foundations','ethics','sensors','gis','auto'].includes(lessonId) && (
-          <div className="text-sm opacity-70">Lesson coming soon.</div>
-        )}
-      </div>
+      {res && (<div className="mt-2 text-sm">{res === 'correct' ? <span className="text-green-700">Nice. That matches the key idea.</span> : <span className="opacity-80">Close. Check wording and key concepts.</span>}</div>)}
     </div>
   );
 }
 
-function LessonCoreFoundations(){
-  const [text, setText] = useState("Brook trout prefer cold, clean streams with shade.");
-  const [win, setWin] = useState(1024);
-  const approxTokens = Math.max(1, Math.round(tokenizeWords(text).length * 1.3));
-  const pct = Math.min(100, Math.round((approxTokens / win) * 100));
-
-  const [p1, setP1] = useState("water quality is rising in spring");
-  const [p2, setP2] = useState("spring conductivity increases as snow melts");
-  const sim = Math.round(cosineSimStr(p1, p2) * 100);
-
-  const corpus = [
-    { id: 'a', t: 'Brook trout habitat', body: 'Cold, shaded streams with dissolved oxygen and groundwater inputs.' },
-    { id: 'b', t: 'Grant timeline', body: 'Outline roles, milestones, and a clear budget with community partners.' },
-    { id: 'c', t: 'Sensors and alerts', body: 'Conductivity spikes may indicate road salt or discharge; verify in field.' },
-    { id: 'd', t: 'Mapping with care', body: 'Buffer sensitive sites and consider hex binning on public maps.' }
-  ];
-  const [q, setQ] = useState("conductivity spikes");
-  const hits = useMemo(()=> corpus.map(c=>({ c, s: jaccardTokens(q, c.body) })).sort((a,b)=> b.s-a.s).slice(0,2), [q]);
-
+// ---- Resources ----
+function Resources({ track }: any){
+  const LinkItem = ({ href, label }: any) => (
+    <a href={href} target="_blank" rel="noreferrer" className="block px-3 py-2 rounded-lg border border-black/10 hover:bg-black/[.04]">{label}</a>
+  );
   return (
-    <div className="grid md:grid-cols-2 gap-5 text-sm">
-      <div className="p-4 rounded-xl border border-black/10">
-        <div className="font-semibold" style={{ color: THEME.coal }}>Token Explorer</div>
-        <textarea className="w-full h-24 p-2 rounded-lg border border-black/10 mt-2" value={text} onChange={e=>setText((e.target as any).value)} />
-        <div className="mt-2 flex items-center gap-2">
-          <input type="range" min="128" max="8192" value={win} onChange={e=>setWin(Number((e.target as any).value))} />
-          <span className="text-xs opacity-70">Window: {win} tokens</span>
+    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {track !== 'nonprofit' && (
+        <Section title="Conservation AI" icon={<Trees className="w-4 h-4" />}>
+          <div className="grid gap-2">
+            <LinkItem href="https://www.wildlabs.net/" label="Wildlabs — Wildlife tech community" />
+            <LinkItem href="https://globalfishingwatch.org/" label="Global Fishing Watch — Transparency mapping" />
+            <LinkItem href="https://developers.planet.com/" label="Planet Labs — Satellite data" />
+          </div>
+        </Section>
+      )}
+      <Section title="AI for Good" icon={<Brain className="w-4 h-4" />}>
+        <div className="grid gap-2">
+          <LinkItem href="https://www.microsoft.com/en-us/ai/ai-for-earth" label="Microsoft AI for Earth" />
+          <LinkItem href="https://conservationxlabs.com/" label="Conservation X Labs" />
+          <LinkItem href="https://www.codeforamerica.org/" label="Code for America" />
         </div>
-        <div className="mt-2 h-2 rounded bg-black/10 overflow-hidden"><div style={{ width: pct+"%", background: THEME.leaf }} className="h-2" /></div>
-        <div className="mt-1 text-xs opacity-70">Approx {approxTokens} tokens · {pct}% of window</div>
-      </div>
-      <div className="p-4 rounded-xl border border-black/10">
-        <div className="font-semibold" style={{ color: THEME.coal }}>Embedding Similarity</div>
-        <input className="w-full p-2 rounded-lg border border-black/10 mt-2" value={p1} onChange={e=>setP1((e.target as any).value)} />
-        <input className="w-full p-2 rounded-lg border border-black/10 mt-2" value={p2} onChange={e=>setP2((e.target as any).value)} />
-        <div className="mt-2 h-2 rounded bg-black/10 overflow-hidden"><div style={{ width: Math.min(100, Math.max(0, sim))+"%", background: THEME.gold }} className="h-2" /></div>
-        <div className="mt-1 text-xs opacity-70">Similarity (cosine on 3-grams): {sim}%</div>
-      </div>
-      <div className="md:col-span-2 p-4 rounded-xl border border-black/10">
-        <div className="font-semibold" style={{ color: THEME.coal }}>Mini Retrieval</div>
-        <input className="w-full p-2 rounded-lg border border-black/10 mt-2" placeholder="Ask a question…" value={q} onChange={e=>setQ((e.target as any).value)} />
-        <div className="mt-2 grid gap-2">
-          {hits.map((h,i)=> (
-            <div key={i} className="p-3 rounded-lg border border-black/10">
-              <div className="text-xs opacity-70">{h.c.t} · score {h.s.toFixed(2)}</div>
-              <div>{h.c.body}</div>
-            </div>
-          ))}
-        </div>
-      </div>
+      </Section>
+      {track === 'teen' && (
+        <Section title="Teen Learn" icon={<Sparkles className="w-4 h-4" />}>
+          <div className="grid gap-2">
+            <LinkItem href="https://p5js.org/" label="p5.js — Creative coding" />
+            <LinkItem href="https://www.khanacademy.org/" label="Khan Academy — Foundations" />
+            <LinkItem href="https://earthengine.google.com/" label="Earth Engine — Environmental data" />
+          </div>
+        </Section>
+      )}
     </div>
   );
 }
 
-function LessonSensorsAlerts(){
-  const base = useMemo(()=> Array.from({length:72}, (_,i)=>{ const spike = (i%23===0?0.9:0) + (i%37===0?1.2:0); return { t: i, pH: 7 + Math.sin(i/8)*0.25 + spike + (Math.random()-0.5)*0.05 }; }), []);
-  const [thr, setThr] = useState(7.6);
-  const [minC, setMinC] = useState(2);
-  const series = useMemo(()=> base.map((r)=> ({ ...r, thresh: thr, alertVal: (r as any).pH >= thr ? (r as any).pH : null })), [base, thr]);
-  const alerts = useMemo(()=> countAlerts(base.map((b:any)=>b.pH), thr, minC), [base, thr, minC]);
-
-  return (
-    <div className="grid md:grid-cols-2 gap-5 text-sm">
-      <div className="p-4 rounded-xl border border-black/10">
-        <div className="font-semibold" style={{ color: THEME.coal }}>Set Thresholds</div>
-        <div className="mt-2 flex items-center gap-2"><input type="range" min="7.0" max="8.5" step="0.05" value={thr} onChange={e=>setThr(Number((e.target as any).value))}/><span className="text-xs">Threshold {thr.toFixed(2)}</span></div>
-        <div className="mt-2 flex items-center gap-2"><input type="range" min="1" max="5" step="1" value={minC} onChange={e=>setMinC(Number((e.target as any).value))}/><span className="text-xs">Consecutive points {minC}</span></div>
-        <div className="mt-2 text-xs opacity-70">Alerts detected: {alerts.count} · Visit recommendation: {alerts.count>=2? 'Yes' : 'Maybe'}.</div>
-      </div>
-      <div className="p-4 rounded-xl border border-black/10">
-        <div className="h-48">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={series as any} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="t" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 10 }} />
-              <Tooltip />
-              <Line type="monotone" dataKey="pH" dot={false} strokeWidth={2} />
-              <Line type="linear" dataKey="thresh" dot={false} strokeWidth={1} />
-              <Line type="linear" dataKey="alertVal" strokeWidth={0} dot />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-    </div>
-  );
-}
-function countAlerts(arr: Array<number>, thr: number, k: number){ let count=0; let run=0; for(const v of arr){ if(v>=thr){ run++; if(run===k){ count++; } } else { run=0; } } return { count }; }
-
-function LessonGISCare(){
-  const [sens, setSens] = useState('medium');
-  const [aud, setAud] = useState('public');
-  const [buf, setBuf] = useState(1.0);
-  const [delay, setDelay] = useState(true);
-  const rec = useMemo(()=>{
-    const items: string[]=[];
-    if(aud==='public') items.push('Use hex bins or 1 km grid.'); else items.push('Show buffered points to partners.');
-    if(sens==='high') items.push('Omit precise locations; only show presence by region.');
-    if(buf>=1) items.push(`Buffer sensitive sites by ${buf.toFixed(1)} km.`);
-    if(delay) items.push('Delay publishing 7 days to avoid real-time risks.');
-    return items;
-  }, [sens,aud,buf,delay]);
-  return (
-    <div className="grid md:grid-cols-2 gap-5 text-sm">
-      <div className="p-4 rounded-xl border border-black/10">
-        <div className="font-semibold" style={{ color: THEME.coal }}>Sharing Controls</div>
-        <label className="block mt-2">Sensitivity
-          <select className="w-full mt-1 p-2 rounded-lg border border-black/10" value={sens} onChange={e=>setSens((e.target as any).value)}>
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-          </select>
-        </label>
-        <label className="block mt-2">Audience
-          <select className="w-full mt-1 p-2 rounded-lg border border-black/10" value={aud} onChange={e=>setAud((e.target as any).value)}>
-            <option value="public">Public</option>
-            <option value="partners">Partners</option>
-            <option value="internal">Internal</option>
-          </select>
-        </label>
-        <div className="mt-2 flex items-center gap-2"><input type="range" min="0" max="5" step="0.5" value={buf} onChange={e=>setBuf(Number((e.target as any).value))}/><span className="text-xs">Buffer {buf.toFixed(1)} km</span></div>
-        <label className="mt-2 text-xs flex items-center gap-2"><input type="checkbox" checked={delay} onChange={e=>setDelay((e.target as any).checked)} /> Delay 7 days</label>
-      </div>
-      <div className="p-4 rounded-xl border border-black/10">
-        <div className="font-semibold" style={{ color: THEME.coal }}>Recommended Public Map Treatment</div>
-        <ul className="list-disc pl-5 mt-2">
-          {rec.map((r,i)=>(<li key={i}>{r}</li>))}
-        </ul>
-        <div className="text-xs opacity-70 mt-2">Goal: inform without harm; protect sensitive species and private land.</div>
-      </div>
-    </div>
-  );
-}
-
-function LessonAutomationsTrust(){
-  const [steps, setSteps] = useState([
-    { id: 'form', label: 'Intake form', enabled: true },
-    { id: 'review', label: 'Human review', enabled: true },
-    { id: 'notify', label: 'Notify team', enabled: true },
-    { id: 'publish', label: 'Publish to map', enabled: false },
-  ] as Array<{id:string,label:string,enabled:boolean}>);
-  const [controls, setControls] = useState({ approvals: true, logs: true, disclosure: true });
-  const [req, setReq] = useState('Report an illegal dump with a photo and location.');
-  const riskPass = (controls as any).approvals && (controls as any).disclosure;
-  const spec = useMemo(()=> ({ steps: (steps as any[]).filter((s:any)=>s.enabled).map((s:any)=>s.id), controls }), [steps,controls]);
-  return (
-    <div className="grid md:grid-cols-2 gap-5 text-sm">
-      <div className="p-4 rounded-xl border border-black/10">
-        <div className="font-semibold" style={{ color: THEME.coal }}>Flow Builder</div>
-        <div className="mt-2 grid gap-2">
-          {steps.map((s:any,i:number)=> (
-            <label key={s.id} className="flex items-center justify-between p-2 rounded-lg border border-black/10">
-              <span>{s.label}</span>
-              <input type="checkbox" checked={s.enabled} onChange={e=> setSteps(prev=> (prev as any).map((x:any,idx:number)=> idx===i? {...x, enabled: (e.target as any).checked}: x))} />
-            </label>
-          ))}
-        </div>
-        <div className="mt-3 grid gap-2">
-          <label className="text-xs flex items-center gap-2"><input type="checkbox" checked={(controls as any).approvals} onChange={e=>setControls((prev:any)=>({...prev, approvals: (e.target as any).checked}))}/> Require approvals</label>
-          <label className="text-xs flex items-center gap-2"><input type="checkbox" checked={(controls as any).logs} onChange={e=>setControls((prev:any)=>({...prev, logs: (e.target as any).checked}))}/> Keep audit logs</label>
-          <label className="text-xs flex items-center gap-2"><input type="checkbox" checked={(controls as any).disclosure} onChange={e=>setControls((prev:any)=>({...prev, disclosure: (e.target as any).checked}))}/> Show public disclosure</label>
-        </div>
-      </div>
-      <div className="p-4 rounded-xl border border-black/10">
-        <div className="font-semibold" style={{ color: THEME.coal }}>Simulate</div>
-        <textarea className="w-full h-20 p-2 rounded-lg border border-black/10" value={req} onChange={e=>setReq((e.target as any).value)} />
-        <div className="mt-2 text-xs">Risk checklist: {riskPass? 'PASS' : 'Needs disclosure/approval'}</div>
-        <div className="mt-2 p-2 rounded-lg border border-black/10 bg-black/[.02]">
-          <div className="text-xs opacity-70">Audit log preview</div>
-          <div>1. Received: {req.slice(0,60)}…</div>
-          {(controls as any).approvals && <div>2. Awaiting human approval…</div>}
-          {(controls as any).logs && <div>3. Logged in system with redaction.</div>}
-          <div>4. {(steps as any[]).find((s:any)=>s.id==='publish' && s.enabled) ? 'Ready to publish after approval.' : 'Holding internal only.'}</div>
-        </div>
-        <div className="mt-2 text-xs opacity-70">Spec JSON (for handoff)</div>
-        <pre className="text-xs bg-black/[.04] p-2 rounded">{JSON.stringify(spec, null, 2)}</pre>
-      </div>
-    </div>
-  );
-}
-
-function LessonEthics(){
-  const [aud, setAud] = useState('public kiosk');
-  const [data, setData] = useState(['photos','locations'] as string[]);
-  const [opts, setOpts] = useState({ retention: '30 days', contact: 'info@example.org' });
-  const toggle = (v: string)=> setData(prev=> (prev as any).includes(v)? (prev as any).filter((x:string)=>x!==v): [...(prev as any),v]);
-  const text = useMemo(()=> {
-    return `We use an assistive system to help review contributions. It processes ${data.join(', ')} to improve conservation decisions. We respect privacy and avoid sensitive site disclosure. You can opt out or request deletion anytime by contacting ${opts.contact}. We retain data for ${opts.retention}.`;
-  }, [data, opts]);
-  return (
-    <div className="grid md:grid-cols-2 gap-5 text-sm">
-      <div className="p-4 rounded-xl border border-black/10">
-        <div className="font-semibold" style={{ color: THEME.coal }}>Disclosure Builder</div>
-        <div className="mt-2">Audience:
-          <select className="ml-2 p-1.5 rounded border border-black/10" value={aud} onChange={e=>setAud((e.target as any).value)}>
-            <option value="public kiosk">Public kiosk</option>
-            <option value="volunteer portal">Volunteer portal</option>
-            <option value="staff tool">Staff tool</option>
-          </select>
-        </div>
-        <div className="mt-2">Data types:</div>
-        <label className="text-xs flex items-center gap-2"><input type="checkbox" checked={(data as any).includes('photos')} onChange={()=>toggle('photos')}/> Photos</label>
-        <label className="text-xs flex items-center gap-2"><input type="checkbox" checked={(data as any).includes('locations')} onChange={()=>toggle('locations')}/> Locations</label>
-        <label className="text-xs flex items-center gap-2"><input type="checkbox" checked={(data as any).includes('contact info')} onChange={()=>toggle('contact info')}/> Contact info</label>
-        <div className="mt-2 grid gap-2">
-          <input className="p-2 rounded border border-black/10" value={opts.contact} onChange={e=>setOpts((prev:any)=>({...prev, contact: (e.target as any).value}))} placeholder="Contact email"/>
-          <input className="p-2 rounded border border-black/10" value={opts.retention} onChange={e=>setOpts((prev:any)=>({...prev, retention: (e.target as any).value}))} placeholder="Retention (e.g., 30 days)"/>
-        </div>
-      </div>
-      <div className="p-4 rounded-xl border border-black/10">
-        <div className="font-semibold" style={{ color: THEME.coal }}>Draft text</div>
-        <textarea className="w-full h-40 p-2 rounded-lg border border-black/10" value={text} onChange={()=>{}} />
-        <div className="text-xs opacity-70 mt-2">Checkpoints: includes audience, data types, consent/opt-out path, retention, and contact.</div>
-      </div>
-    </div>
-  );
-}
-
-// ---- Admin & Resources ----
+// ---- Admin ----
 function Admin({ mapToken, setMapToken }: any){
   return (
-    <div className="grid lg:grid-cols-2 gap-6">
-      <Section title="Mapbox Token" icon={<Globe2 className="w-4 h-4" />}>
-        <div className="text-sm opacity-80">Optional: add a public Mapbox token to enable vector styles. OSM fallback will still work.</div>
-        <input className="mt-2 w-full p-2 rounded-lg border border-black/10" value={mapToken} onChange={e=>setMapToken((e.target as any).value)} placeholder="pk.***" />
+    <div className="grid md:grid-cols-2 gap-6">
+      <Section title="Map Settings" icon={<Map className="w-4 h-4" />}>
+        <div className="text-sm opacity-80">Add a public Mapbox token to enable vector styles. Without a token we use OSM raster.</div>
+        <input value={mapToken} onChange={e=>setMapToken((e.target as any).value)} placeholder="pk. public token" className="mt-2 w-full p-2 rounded-lg border border-black/10 text-sm" />
       </Section>
-      <Section title="Help & Support" icon={<HelpCircle className="w-4 h-4" />}>
-        <div className="text-sm opacity-80">Questions or ideas? Capture notes in the Scratchpad and share with your facilitator.</div>
-      </Section>
-      <Section title="Dev Tests" icon={<CheckCircle2 className="w-4 h-4" />}>
-        <DevTests />
-      </Section>
-    </div>
-  );
-}
-
-function Resources({ track }: any){
-  return (
-    <div className="grid gap-4">
-      <Section title="Getting Started" icon={<BookOpen className="w-4 h-4" />}>
-        <div className="text-sm opacity-80">Short reading list and links tailored to your track: {track}.</div>
+      <Section title="Guidance" icon={<HelpCircle className="w-4 h-4" />}>
+        <ul className="list-disc pl-5 text-sm space-y-1">
+          <li>Deep Dive data stays in your browser. For workshops, consider an optional export toggle.</li>
+          <li>GitHub Pages ready. Render <code>&lt;WildPraxisV2App /&gt;</code> in your entry file.</li>
+        </ul>
       </Section>
     </div>
   );
 }
 
-function DevTests(){
-  const [out, setOut] = useState([] as Array<{name:string, pass:boolean}>);
-  function run(){
-    const results: Array<{name:string, pass:boolean}> = [];
-    const s1 = cosineSimStr('brook trout habitat', 'habitat for trout in brooks') > 0.35;
-    results.push({ name: 'Cosine similar phrases', pass: s1 });
-    const s2 = jaccardTokens('conductivity rises in spring', 'spring conductivity up') > 0.3;
-    results.push({ name: 'Token overlap basic', pass: s2 });
-    const arr=[1,2,7,8,9,2];
-    const a = (function(arr:number[],thr:number,k:number){ let c=0,r=0; for(const v of arr){ if(v>=thr){ r++; if(r===k){ c++; } } else { r=0; } } return c; })(arr,7,2);
-    results.push({ name: 'Alert counter cluster', pass: a===1 });
-    setOut(results);
-  }
+// ---- Footer ----
+function Footer(){
   return (
-    <div className="text-sm">
-      <button onClick={run} className="px-3 py-2 rounded-lg text-sm border border-black/10">Run tests</button>
-      <ul className="mt-2 grid gap-1">
-        {out.map((r,i)=> (<li key={i} className="flex items-center gap-2"><span className={pill} style={{ background: r.pass? THEME.leaf : '#ef4444', color:'white' }}>{r.pass? 'PASS' : 'FAIL'}</span> {r.name}</li>))}
-      </ul>
-    </div>
+    <footer className="py-10 mt-8 border-t border-black/5">
+      <div className="mx-auto max-w-7xl px-4 grid md:grid-cols-3 gap-6 text-sm">
+        <div>
+          <h4 className="font-semibold mb-1" style={{ color: THEME.coal }}>About</h4>
+          <p className="opacity-70">WildPraxis v2 adds an iPad-style Lesson Runner so learners can tap lessons in Literacy, Data, and Implementation.</p>
+        </div>
+        <div>
+          <h4 className="font-semibold mb-1" style={{ color: THEME.coal }}>Branding</h4>
+          <p className="opacity-70">Adjust THEME tokens to match Wildlife Leadership Academy palette. Teen accents use pink and indigo.</p>
+        </div>
+        <div>
+          <h4 className="font-semibold mb-1" style={{ color: THEME.coal }}>Credits</h4>
+          <p className="opacity-70">Icons: lucide-react • Charts: Recharts • Maps: OpenStreetMap / Mapbox GL (token optional).</p>
+        </div>
+      </div>
+    </footer>
   );
 }
+
+
